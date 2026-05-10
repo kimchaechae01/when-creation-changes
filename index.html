@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="An interactive web experience comparing how creation is defined across image, audio, and video, and what AI-driven creation has changed about that definition.">
+<meta property="og:title" content="When Creation Changes">
+<meta property="og:description" content="Three media. Three sets. The same question, asked nine times.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#BFDDF1">
+<title>When Creation Changes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+/* =========================================================================
+   When Creation Changes — full three-set prototype.
+   Data-driven architecture: scene templates populated from `sets` config.
+   Audio (Set 2) and video (Set 3) playback with minimal custom controls.
+========================================================================= */
+
+:root {
+  --bg: #FAFBFD;
+  --bg-soft: #B0DAEE;
+  --bg-hero-top: #BFDDF1;
+  --bg-hero-bot: #FAFBFD;
+  --text: #0F172A;
+  --text-soft: #475569;
+  --text-mute: #94A3B8;
+  --rule: #DBE4ED;
+  --accent: #6FA9D4;
+  --accent-soft: #B3D9F2;
+  --accent-pale: #DEEDF7;
+  --highlight: #0F172A;
+  --shadow: rgba(15, 23, 42, 0.06);
+  --shadow-strong: rgba(15, 23, 42, 0.12);
+  --serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --transition: 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; background: var(--bg); }
+body { min-height: 100%; background: var(--bg); }
+body {
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+}
+
+.scene { display: none; width: 100%; max-width: 1400px; opacity: 0; transition: opacity var(--transition); }
+.scene.active { display: block; opacity: 1; }
+body.scene-intro-active {
+  background: linear-gradient(180deg, var(--bg-hero-top) 0%, var(--bg-hero-bot) 60%);
+}
+body.scene-final-active {
+  background: var(--bg-soft);
+}
+
+/* ---------- Typography ---------- */
+.eyebrow {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+.prompt {
+  font-family: var(--serif);
+  font-size: clamp(1.6rem, 3.4vw, 2.6rem);
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.25;
+  text-align: center;
+  margin-bottom: 3.5rem;
+  letter-spacing: -0.005em;
+}
+.scene-pause-text {
+  font-family: var(--serif);
+  font-size: clamp(1.4rem, 2.8vw, 2.1rem);
+  font-style: italic;
+  text-align: center;
+  line-height: 1.5;
+  color: var(--text-soft);
+  max-width: 36ch;
+  margin: 0 auto 4rem;
+}
+
+/* ---------- Trio ---------- */
+.trio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  align-items: start;
+  margin-bottom: 3rem;
+}
+.work {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: opacity var(--transition);
+  position: relative;
+}
+.trio:not(.selectable) .work { cursor: default; }
+.work-frame {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  background: var(--bg-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 4px 24px var(--shadow);
+  transition: box-shadow var(--transition), transform var(--transition);
+  position: relative;
+  border-radius: 2px;
+}
+.work-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: var(--bg-soft);
+}
+.work-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--bg-soft);
+}
+.work-frame .placeholder {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  color: var(--text-mute);
+  text-align: center;
+  padding: 1.5rem;
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+}
+
+.trio.selectable .work:hover .work-frame {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 32px var(--shadow-strong);
+}
+.trio.has-selection .work { opacity: 0.4; }
+.trio.has-selection .work.selected { opacity: 1; }
+.trio.has-selection .work.selected .work-frame { outline: 2px solid var(--accent); outline-offset: 12px; }
+
+/* ---------- Audio control (visible inside frame for Set 2) ---------- */
+.audio-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 2rem;
+}
+.audio-play-btn {
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--text);
+  color: var(--text);
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), transform var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.audio-play-btn:hover {
+  background: var(--text);
+  color: var(--bg);
+  transform: scale(1.04);
+}
+.audio-play-btn.playing {
+  background: var(--text);
+  color: var(--bg);
+}
+.audio-time {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+.audio-bar {
+  width: 80%;
+  height: 2px;
+  background: var(--rule);
+  position: relative;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.audio-bar-fill {
+  height: 100%;
+  background: var(--text);
+  width: 0;
+  transition: width 100ms linear;
+}
+
+/* ---------- Video control overlay ---------- */
+.video-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15,23,42,0.18);
+  transition: opacity var(--transition);
+  z-index: 2;
+  pointer-events: none;
+}
+.video-overlay.hidden { opacity: 0; pointer-events: none; }
+.video-overlay-btn {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(250,251,253,0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: var(--text);
+  box-shadow: 0 4px 20px var(--shadow);
+  cursor: pointer;
+  pointer-events: auto;
+  font-family: var(--sans);
+}
+
+/* ---------- Method labels ---------- */
+.method-text {
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--text-soft);
+  text-align: center;
+  margin-top: 1.5rem;
+  line-height: 1.5;
+  opacity: 0;
+  transition: opacity 700ms ease-out;
+  padding: 0 0.5rem;
+}
+.method-text.visible { opacity: 1; }
+.method-text strong, .method-text b {
+  font-style: normal;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---------- Structure reveal ---------- */
+.structure-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 1.5rem;
+  padding: 0 0.5rem;
+}
+.structure-line {
+  font-family: var(--serif);
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 700ms ease-out, transform 700ms ease-out;
+}
+.structure-line.visible { opacity: 1; transform: translateY(0); }
+.structure-line.emphasis { font-weight: 700; color: var(--text); }
+
+/* ---------- Reasons ---------- */
+.reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 28rem;
+  margin: 2rem auto;
+}
+.reason-btn {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  padding: 1rem 0.5rem;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--transition), padding var(--transition);
+}
+.reason-btn:hover { background: var(--accent-pale); padding-left: 1.25rem; }
+.reason-btn:last-child { border-bottom: none; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 1rem 2rem;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: background var(--transition), color var(--transition), transform var(--transition);
+}
+.btn:hover { background: var(--accent); color: #fff; transform: translateY(-1px); }
+.btn-ghost { background: transparent; border: 1px solid var(--text); }
+.btn-ghost:hover { background: var(--text); color: var(--bg); }
+.btn-row { display: flex; justify-content: center; gap: 1rem; margin-top: 3rem; }
+.btn-row.choice .btn { min-width: 130px; }
+
+/* ---------- Reflect: timeline ---------- */
+.timeline {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 1.5rem;
+  align-items: stretch;
+  max-width: 1100px;
+  margin: 0 auto 4rem;
+}
+.timeline-step {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color var(--transition), background var(--transition);
+}
+.timeline-step.changed {
+  border-color: var(--accent);
+  background: var(--accent-pale);
+}
+.timeline-step .stage {
+  font-family: var(--sans);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.timeline-step .pick-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  background: var(--bg-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 2px;
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  color: var(--text-mute);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0.5rem;
+}
+.timeline-step .pick-thumb img,
+.timeline-step .pick-thumb video {
+  width: 100%; height: 100%; object-fit: contain;
+}
+.timeline-step .pick-name {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-style: italic;
+}
+.timeline-step .pick-reason {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  letter-spacing: 0.02em;
+}
+.timeline-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-mute);
+  font-family: var(--sans);
+  font-size: 1.2rem;
+}
+
+/* ---------- Aggregate ---------- */
+.aggregate { max-width: 36rem; margin: 3rem auto; }
+.agg-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 60px;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--sans);
+  font-size: 0.9rem;
+}
+.agg-row .label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.agg-row .bar-track { height: 4px; background: var(--bg-soft); position: relative; border-radius: 2px; overflow: hidden; }
+.agg-row .bar-fill { height: 100%; background: var(--accent); width: 0; transition: width 1500ms cubic-bezier(0.4, 0, 0.2, 1); }
+.agg-row .pct { font-variant-numeric: tabular-nums; text-align: right; font-weight: 500; }
+.aggregate-note {
+  font-family: var(--serif);
+  font-style: italic;
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 1.05rem;
+  margin: 2.5rem auto 0;
+  max-width: 40ch;
+  opacity: 0;
+  transition: opacity 1200ms ease-out;
+}
+.aggregate-note.visible { opacity: 1; }
+
+/* ---------- Closing / transition ---------- */
+.closing { text-align: center; font-family: var(--serif); }
+.closing .marker {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin-bottom: 2rem;
+}
+.closing .next {
+  font-style: italic;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+.closing-blurb {
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  max-width: 30rem;
+  margin: 1.5rem auto 3rem;
+  line-height: 1.6;
+}
+
+/* ---------- Intro / final ---------- */
+.intro, .final-wrap { text-align: center; max-width: 60rem; margin: 0 auto; }
+.intro .tagline, .final-wrap .tagline {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  margin-bottom: 2.5rem;
+}
+.intro .title, .final-wrap .title {
+  font-family: var(--serif);
+  font-size: clamp(2.2rem, 5.5vw, 4rem);
+  font-weight: 400;
+  font-style: italic;
+  margin-bottom: 1.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.intro .blurb, .final-wrap .blurb {
+  font-family: var(--sans);
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-soft);
+  max-width: 38rem;
+  margin: 2rem auto 4rem;
+}
+
+/* ---------- Final cross-set summary grid ---------- */
+.summary-grid {
+  display: grid;
+  grid-template-columns: auto repeat(3, 1fr);
+  gap: 0.75rem 1.5rem;
+  max-width: 1000px;
+  margin: 0 auto 3rem;
+  align-items: center;
+}
+.summary-grid .row-label {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  text-align: right;
+}
+.summary-grid .col-label {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-align: center;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+.summary-pick {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 0.6rem 0.5rem;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  transition: border-color var(--transition), background var(--transition);
+}
+.summary-pick.changed-from-prev {
+  border-color: var(--accent);
+  background: var(--accent-pale);
+}
+
+.final-stat-line {
+  font-family: var(--serif);
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+  font-style: italic;
+  text-align: center;
+  margin: 1rem auto;
+  color: var(--text);
+}
+.final-stat-line .num {
+  font-style: normal;
+  font-weight: 600;
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1em;
+}
+
+/* ---------- Closing manifesto ---------- */
+.manifesto {
+  font-family: var(--serif);
+  font-size: clamp(1.1rem, 2.2vw, 1.45rem);
+  line-height: 1.65;
+  text-align: center;
+  max-width: 38rem;
+  margin: 4rem auto 2rem;
+  color: var(--text);
+}
+.manifesto p { margin-bottom: 1.5rem; }
+.manifesto p:last-child { font-style: italic; }
+
+/* ---------- Reflect summary line ---------- */
+.reflect-summary-line {
+  font-family: var(--serif);
+  font-style: italic;
+  text-align: center;
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
+  color: var(--text-soft);
+  margin-bottom: 3rem;
+  max-width: 40rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---------- Progress ---------- */
+.progress {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  z-index: 100;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 800px) {
+  body { font-size: 17px; }
+  main { padding: 2rem 1rem; }
+  .trio { grid-template-columns: 1fr; gap: 2rem; }
+  .prompt { font-size: 1.5rem; margin-bottom: 2rem; }
+  .timeline { grid-template-columns: 1fr; gap: 1rem; }
+  .timeline-arrow { transform: rotate(90deg); padding: 0.5rem 0; }
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .summary-grid .row-label { text-align: left; padding-top: 1rem; }
+  .summary-grid .col-label { display: none; }
+  .progress { top: 1rem; right: 1rem; }
+}
+</style>
+</head>
+<body class="scene-intro-active">
+
+<div class="progress" id="progress">When Creation Changes</div>
+
+<main>
+
+<!-- ============== INTRO ============== -->
+<section class="scene active" id="scene-intro">
+  <div class="intro">
+    <div class="tagline">When Creation Changes</div>
+    <h1 class="title">Creation has always changed.<br>So has everything it hides.</h1>
+    <p class="blurb">Three media. Three sets. Each set asks the same question: which of these feels most like an act of creation? You will judge first, learn how each was made, and then learn what that making rests on. Your judgment will be asked again at every stage. The project does not offer a conclusion. It asks you to notice your own.</p>
+    <div class="btn-row">
+      <button class="btn" id="btn-begin">Begin</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============== JUDGE (templated) ============== -->
+<section class="scene" id="scene-judge">
+  <h2 class="prompt" id="judge-prompt">Which feels most like an act of creation?</h2>
+  <div class="trio selectable" id="trio-judge"></div>
+</section>
+
+<!-- ============== REASON (templated) ============== -->
+<section class="scene" id="scene-reason">
+  <h2 class="prompt">Why?</h2>
+  <div class="trio has-selection" id="trio-reason"></div>
+  <div class="reasons">
+    <button class="reason-btn" data-reason="intentional">It feels more intentional</button>
+    <button class="reason-btn" data-reason="expressive">It feels more expressive</button>
+    <button class="reason-btn" data-reason="craft">I can see more craft in it</button>
+    <button class="reason-btn" data-reason="instinct">I just felt it</button>
+    <button class="reason-btn" data-reason="unsure">I'm not sure</button>
+  </div>
+</section>
+
+<!-- ============== METHOD (templated) ============== -->
+<section class="scene" id="scene-method">
+  <h2 class="prompt">This is how each was made.</h2>
+  <div class="trio" id="trio-method"></div>
+  <div class="btn-row"><button class="btn" id="btn-method-continue">Continue</button></div>
+</section>
+
+<!-- ============== STRUCTURE (templated) ============== -->
+<section class="scene" id="scene-structure">
+  <div class="trio" id="trio-structure"></div>
+  <div class="btn-row" id="structure-continue" style="opacity:0; transition:opacity 1s ease-out 0.5s;">
+    <button class="btn" id="btn-structure-continue">Continue</button>
+  </div>
+</section>
+
+<!-- ============== REFLECT per set (templated) ============== -->
+<section class="scene" id="scene-reflect">
+  <h2 class="prompt">Your judgment, across three stages.</h2>
+  <p class="reflect-summary-line" id="summary-line"></p>
+  <div class="timeline" id="timeline">
+    <div class="timeline-step" id="step-1">
+      <div class="stage">Before any context</div>
+      <div class="pick-thumb" id="thumb-1"></div>
+      <div class="pick-name" id="name-1">—</div>
+      <div class="pick-reason" id="reason-1">—</div>
+    </div>
+    <div class="timeline-arrow">→</div>
+    <div class="timeline-step" id="step-2">
+      <div class="stage">After learning method</div>
+      <div class="pick-thumb" id="thumb-2"></div>
+      <div class="pick-name" id="name-2">—</div>
+      <div class="pick-reason" id="reason-2">—</div>
+    </div>
+    <div class="timeline-arrow">→</div>
+    <div class="timeline-step" id="step-3">
+      <div class="stage">After learning structure</div>
+      <div class="pick-thumb" id="thumb-3"></div>
+      <div class="pick-name" id="name-3">—</div>
+      <div class="pick-reason" id="reason-3">—</div>
+    </div>
+  </div>
+  <p class="eyebrow" style="margin-top: 1rem;">Aggregate of viewers so far</p>
+  <div class="aggregate" id="aggregate"></div>
+  <p class="aggregate-note" id="agg-note"></p>
+  <div class="btn-row"><button class="btn" id="btn-reflect-continue">Continue</button></div>
+</section>
+
+<!-- ============== TRANSITION between sets ============== -->
+<section class="scene" id="scene-transition">
+  <div class="closing">
+    <p class="marker" id="transition-marker">End of Set 1 of 3</p>
+    <p class="next" id="transition-next">The next set is sound.</p>
+    <p class="closing-blurb" id="transition-blurb">The next set follows the same three-act structure. Its second reveal is different. It exposes what listening hides.</p>
+    <div class="btn-row"><button class="btn" id="btn-transition-continue">Continue</button></div>
+  </div>
+</section>
+
+<!-- ============== FINAL: cross-set summary ============== -->
+<section class="scene" id="scene-final">
+  <div class="final-wrap">
+    <div class="tagline">End of all three sets</div>
+    <h1 class="title">You judged nine times.</h1>
+    <p class="blurb">Across three media, you were asked the same question nine times. Here is your map.</p>
+    <div class="summary-grid" id="summary-grid">
+      <div></div>
+      <div class="col-label">Image</div>
+      <div class="col-label">Audio</div>
+      <div class="col-label">Video</div>
+
+      <div class="row-label">Before context</div>
+      <div class="summary-pick" data-cell="1-1">—</div>
+      <div class="summary-pick" data-cell="2-1">—</div>
+      <div class="summary-pick" data-cell="3-1">—</div>
+
+      <div class="row-label">After method</div>
+      <div class="summary-pick" data-cell="1-2">—</div>
+      <div class="summary-pick" data-cell="2-2">—</div>
+      <div class="summary-pick" data-cell="3-2">—</div>
+
+      <div class="row-label">After structure</div>
+      <div class="summary-pick" data-cell="1-3">—</div>
+      <div class="summary-pick" data-cell="2-3">—</div>
+      <div class="summary-pick" data-cell="3-3">—</div>
+    </div>
+
+    <p class="final-stat-line" id="final-stat-1"></p>
+    <p class="final-stat-line" id="final-stat-2"></p>
+    <p class="final-stat-line" id="final-stat-3"></p>
+
+    <div class="manifesto">
+      <p>Creation has always changed.</p>
+      <p>The change you saw, heard, watched today is different from the changes before. In scale, in speed, in the conditions of labor and consent that produced what reached you.</p>
+      <p>The project does not tell you what to do with that.</p>
+      <p>It only asks that you do not stop noticing.</p>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="btn-restart">Restart</button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+/* =========================================================================
+   Data
+========================================================================= */
+const sets = [
+  {
+    id: 1,
+    label: 'Set 1 of 3',
+    medium: 'Image',
+    nextLabel: 'The next set is sound.',
+    nextBlurb: 'The next set follows the same three acts. Its second reveal is different. It exposes what listening hides.',
+    works: {
+      left:   { type: 'image', src: 'images/painting.jpg', label: 'Painting' },
+      middle: { type: 'image', src: 'images/photo.jpg',    label: 'Photograph' },
+      right:  { type: 'image', src: 'images/ai.png',       label: 'AI image' },
+    },
+    method: {
+      left:   '<strong>Paul Cézanne</strong>, <em>Still Life with Milk Jug and Fruit</em>, c. 1900. Oil on canvas. Painted in his Aix-en-Provence studio.',
+      middle: '<strong>Karolina Grabowska</strong>, <em>Still Life with Beige Vases on Gray Background</em>, 2021. Constructed and photographed in studio.',
+      right:  'Generated by <strong>Midjourney v7</strong> from a text prompt, April 2026. Output time: ≈ 60 seconds.',
+    },
+    structure: {
+      left: [
+        { text: 'Cézanne returned to these vessels across decades.' },
+        { text: 'He painted them in light that shifted minute by minute.' },
+        { text: 'He owned them.', emphasis: true },
+      ],
+      middle: [
+        { text: 'Karolina Grabowska arranged the vessels herself. Lit them. Photographed them.' },
+        { text: 'She uploaded the photograph to Pexels under a license that permits anyone, including AI companies, to use it.' },
+        { text: 'Whether it has been used to train a model, she cannot find out. The tool that would tell her is offline.', emphasis: true },
+      ],
+      right: [
+        { text: 'The image was generated by a model trained on 5.85 billion images scraped from the internet without consent.' },
+        { text: 'The dataset (LAION-5B) was found in December 2023 to contain child sexual abuse material. It was taken offline.' },
+        { text: 'The artists whose work it absorbed are plaintiffs in <em>Andersen v. Stability AI</em>. Trial: September 2026.' },
+        { text: 'In September 2025, Anthropic settled a parallel case for $1.5 billion, the largest copyright settlement in US history.' },
+        { text: 'Cost to generate the image you saw: less than a cent.', emphasis: true },
+      ],
+    },
+    aggregate: { left: 52, middle: 34, right: 14 },
+    aggNote: 'Across all stages, 38% of viewers changed at least one of their three picks.',
+    promptStage1: 'Which feels most like an act of creation?',
+    promptStage2: 'Now that you know how each was made,<br>which feels most like an act of creation?',
+    promptStage3: 'And now that you know what each rests on,<br>which feels most like an act of creation?',
+  },
+  {
+    id: 2,
+    label: 'Set 2 of 3',
+    medium: 'Audio',
+    nextLabel: 'The next set is moving images.',
+    nextBlurb: 'The final set follows the same three acts. Its reveal carries the longest stack.',
+    works: {
+      left:   { type: 'audio', src: 'audio/satie.mp3',     label: 'Composition' },
+      middle: { type: 'audio', src: 'audio/zabriskie.mp3', label: 'Released CC' },
+      right:  { type: 'audio', src: 'audio/suno.mp3',      label: 'AI track' },
+    },
+    method: {
+      left:   '<strong>Erik Satie</strong>, <em>Gymnopédie No. 1</em>, composed 1888.<br>Performed by Kevin MacLeod.',
+      middle: '<strong>Chris Zabriskie</strong>, <em>Cylinder Five</em>, 2014.<br>Released by the artist under Creative Commons BY 4.0.',
+      right:  'Generated by <strong>Suno v5.5</strong> from a text prompt, April 2026.<br>Output time: ≈ 30 seconds.',
+    },
+    structure: {
+      left: [
+        { text: 'Satie wrote <em>Gymnopédie No. 1</em> in 1888 in his single-room Montmartre apartment.' },
+        { text: 'He earned almost nothing from the piece during his lifetime. He died in 1925 owing rent.' },
+        { text: 'The composition is now in the public domain. Anyone may perform it.', emphasis: true },
+      ],
+      middle: [
+        { text: 'Chris Zabriskie released <em>Cylinder Five</em> under Creative Commons BY 4.0 in 2014.' },
+        { text: 'The license permits anyone, including AI music companies, to use it. He is paid no royalties when it is streamed, sampled, or trained on.' },
+        { text: 'Whether his work has been used to train any model, he cannot find out. The companies that would tell him are in court.', emphasis: true },
+      ],
+      right: [
+        { text: 'The track was generated by a model trained on millions of recordings, many of them ingested without notice or consent.' },
+        { text: 'In June 2024, Sony, Universal, and Warner sued Suno and Udio for mass infringement of sound recordings.' },
+        { text: 'In October 2025, Universal Music settled with Udio. The settlement set a per-generation royalty between $0.002 and $0.005, roughly one-thousandth of a typical streaming royalty.' },
+        { text: 'A composer\'s lifetime catalog of recordings, ingested into a model that never named them, generates new "compositions" at a price the composer cannot match.' },
+        { text: 'Cost to generate the track you just heard: under a tenth of a cent.', emphasis: true },
+      ],
+    },
+    aggregate: { left: 63, middle: 35, right: 2 },
+    aggNote: 'Across all stages, 44% of viewers changed at least one of their three picks.',
+    promptStage1: 'Which feels most like an act of creation?',
+    promptStage2: 'Now that you know how each was made,<br>which feels most like an act of creation?',
+    promptStage3: 'And now that you know what each rests on,<br>which feels most like an act of creation?',
+  },
+  {
+    id: 3,
+    label: 'Set 3 of 3',
+    medium: 'Video',
+    nextLabel: null,
+    nextBlurb: null,
+    works: {
+      left:   { type: 'video', src: 'video/pexels.mp4',    label: 'Stock clip' },
+      middle: { type: 'video', src: 'video/self_edit.mp4', label: 'Self-edit' },
+      right:  { type: 'video', src: 'video/kling.mp4',     label: 'AI video' },
+    },
+    method: {
+      left:   '<strong>Hanna Pad</strong>, <em>A Shadow of a Palm Leaf</em>, c. 2020.<br>Filmed on consumer camera. Released under Pexels License.',
+      middle: 'Constructed in <strong>Blender</strong> by the project author.<br>Palm leaves modeled, animated, and rendered to echo the stock clip\'s shadow play. Working time: ≈ 1 hour, plus 5 minutes render.',
+      right:  'Generated by <strong>Kling</strong> from a text prompt, April 2026.<br>Output time: ≈ 20 seconds.',
+    },
+    structure: {
+      left: [
+        { text: 'The contributor uploaded the clip in 2020 under a license that permits anyone, anywhere, to use it.' },
+        { text: 'They are not paid per view, per download, or per use.' },
+        { text: 'Whether the clip has been ingested into video-generation training data, they cannot find out. The tools that would tell them do not exist.', emphasis: true },
+      ],
+      middle: [
+        { text: 'The scene was constructed in Blender. Palm leaves modeled, surfaced, lit, animated, rendered.' },
+        { text: 'The work took roughly 1 hour. The render took 5 minutes more.' },
+        { text: 'The labor is visible. The bill is countable.', emphasis: true },
+      ],
+      right: [
+        { text: 'The clip was generated by a model trained on a corpus of video at a scale no individual filmmaker could audit.' },
+        { text: 'In February 2024, Tyler Perry paused an $800 million expansion of his Atlanta studio after seeing the original Sora preview. He named the threatened crafts: actors, grip, electric, transportation, sound, editors.' },
+        { text: 'The 2023 SAG-AFTRA strike, 118 days, won the first union contract terms governing AI replicas of performers. Background actors were the central battleground. Their consent rights now survive their deaths.' },
+        { text: 'A single visual-effects shot in <em>The Lord of the Rings</em> took up to four hours per frame to render. <em>The Rings of Power</em> required 20 visual-effects studios to deliver roughly 10,000 shots.' },
+        { text: 'Generative video models like Sora 2, Kling, and Runway produce a 10-second clip in seconds. Cost: cents.' },
+        { text: 'Some of the data such models are trained on comes from workers wearing helmet-mounted cameras in factories in India, capturing eye-level video synchronized with hand movement. They earn between $230 and $250 per month. They cannot refuse the helmets.' },
+        { text: 'Cost to generate the clip you just watched: under a cent.', emphasis: true },
+      ],
+    },
+    aggregate: { left: 27, middle: 62, right: 11 },
+    aggNote: 'Across all stages, 51% of viewers changed at least one of their three picks. The video set produces the largest movement.',
+    promptStage1: 'Which feels most like an act of creation?',
+    promptStage2: 'Now that you know how each was made,<br>which feels most like an act of creation?',
+    promptStage3: 'And now that you know what each rests on,<br>which feels most like an act of creation?',
+  },
+];
+
+const SIDES = ['left', 'middle', 'right'];
+const REASON_LABELS = {
+  intentional: 'felt more intentional',
+  expressive: 'felt more expressive',
+  craft: 'showed more craft',
+  instinct: 'just a feeling',
+  unsure: 'unsure',
+};
+
+/* =========================================================================
+   State
+========================================================================= */
+const state = {
+  setIndex: 0,         // 0, 1, 2 (corresponds to sets[0], sets[1], sets[2])
+  judgeStage: 1,       // 1, 2, or 3 (for the current set's judge round)
+  judgments: {
+    1: { judge1: null, reason1: null, judge2: null, reason2: null, judge3: null, reason3: null },
+    2: { judge1: null, reason1: null, judge2: null, reason2: null, judge3: null, reason3: null },
+    3: { judge1: null, reason1: null, judge2: null, reason2: null, judge3: null, reason3: null },
+  },
+};
+
+const currentSet = () => sets[state.setIndex];
+
+/* =========================================================================
+   Media: pause all, build work elements
+========================================================================= */
+function pauseAllMedia() {
+  document.querySelectorAll('audio, video').forEach(m => {
+    if (!m.paused) m.pause();
+  });
+  document.querySelectorAll('.audio-play-btn.playing').forEach(b => {
+    b.classList.remove('playing');
+    b.textContent = '▶';
+  });
+  document.querySelectorAll('.video-overlay').forEach(o => o.classList.remove('hidden'));
+}
+
+function fmtTime(t) {
+  if (!isFinite(t)) return '0:00';
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function buildWorkFrame(work) {
+  const frame = document.createElement('div');
+  frame.className = 'work-frame';
+  if (work.type === 'image') {
+    frame.innerHTML = `
+      <img src="${work.src}" alt="${work.label}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <div class="placeholder" style="display:none;">[ ${work.src} ]<br>save image to this path</div>
+    `;
+  } else if (work.type === 'audio') {
+    frame.classList.add('audio-frame');
+    frame.innerHTML = `
+      <button class="audio-play-btn" type="button" aria-label="Play ${work.label}">▶</button>
+      <div class="audio-bar"><div class="audio-bar-fill"></div></div>
+      <div class="audio-time">0:00 / 0:00</div>
+      <audio preload="metadata"></audio>
+      <div class="placeholder" style="display:none; font-size:0.65rem; margin-top:0.5rem;">[ ${work.src} ]<br>save audio to this path</div>
+    `;
+    const audio = frame.querySelector('audio');
+    audio.src = work.src;
+    const btn = frame.querySelector('.audio-play-btn');
+    const time = frame.querySelector('.audio-time');
+    const fill = frame.querySelector('.audio-bar-fill');
+    const placeholder = frame.querySelector('.placeholder');
+    audio.addEventListener('error', () => { placeholder.style.display = 'block'; });
+    audio.addEventListener('loadedmetadata', () => {
+      time.textContent = `0:00 / ${fmtTime(audio.duration)}`;
+    });
+    audio.addEventListener('timeupdate', () => {
+      time.textContent = `${fmtTime(audio.currentTime)} / ${fmtTime(audio.duration)}`;
+      if (audio.duration) fill.style.width = (audio.currentTime / audio.duration * 100) + '%';
+    });
+    audio.addEventListener('ended', () => {
+      btn.classList.remove('playing');
+      btn.textContent = '▶';
+      fill.style.width = '0%';
+    });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (audio.paused) {
+        pauseAllMedia();
+        audio.play().catch(() => {});
+        btn.classList.add('playing');
+        btn.textContent = '◼';
+      } else {
+        audio.pause();
+        btn.classList.remove('playing');
+        btn.textContent = '▶';
+      }
+    });
+  } else if (work.type === 'video') {
+    frame.innerHTML = `
+      <video preload="metadata" muted playsinline aria-label="${work.label}"></video>
+      <div class="video-overlay"><button class="video-overlay-btn" type="button" aria-label="Play ${work.label}">▶</button></div>
+      <div class="placeholder" style="display:none;">[ ${work.src} ]<br>save video to this path</div>
+    `;
+    const video = frame.querySelector('video');
+    video.src = work.src;
+    const overlay = frame.querySelector('.video-overlay');
+    const overlayBtn = frame.querySelector('.video-overlay-btn');
+    const placeholder = frame.querySelector('.placeholder');
+    video.addEventListener('error', () => {
+      video.style.display = 'none';
+      overlay.style.display = 'none';
+      placeholder.style.display = 'block';
+    });
+    video.addEventListener('ended', () => overlay.classList.remove('hidden'));
+    overlayBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (video.paused) {
+        pauseAllMedia();
+        video.play().catch(() => {});
+        overlay.classList.add('hidden');
+      } else {
+        video.pause();
+        overlay.classList.remove('hidden');
+      }
+    });
+  }
+  return frame;
+}
+
+function makeWorkElement(side, work, opts = {}) {
+  const el = document.createElement('div');
+  el.className = 'work';
+  el.dataset.side = side;
+  el.appendChild(buildWorkFrame(work));
+  if (opts.afterFrameHTML) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = opts.afterFrameHTML;
+    while (wrap.firstChild) el.appendChild(wrap.firstChild);
+  }
+  return el;
+}
+
+/* =========================================================================
+   Render functions per scene
+========================================================================= */
+function renderJudge() {
+  const set = currentSet();
+  const promptHTML = state.judgeStage === 1 ? set.promptStage1
+                   : state.judgeStage === 2 ? set.promptStage2
+                                            : set.promptStage3;
+  document.getElementById('judge-prompt').innerHTML = promptHTML;
+
+  const trio = document.getElementById('trio-judge');
+  trio.innerHTML = '';
+  trio.classList.remove('has-selection');
+  SIDES.forEach(side => {
+    trio.appendChild(makeWorkElement(side, set.works[side]));
+  });
+  trio.querySelectorAll('.work').forEach(work => {
+    work.addEventListener('click', () => {
+      const side = work.dataset.side;
+      state.judgments[set.id]['judge' + state.judgeStage] = side;
+      trio.querySelectorAll('.work').forEach(w => w.classList.remove('selected'));
+      work.classList.add('selected');
+      trio.classList.add('has-selection');
+      pauseAllMedia();
+      setTimeout(() => goToScene('reason'), 700);
+    });
+  });
+}
+
+function renderReason() {
+  const set = currentSet();
+  const trio = document.getElementById('trio-reason');
+  trio.innerHTML = '';
+  const pickedSide = state.judgments[set.id]['judge' + state.judgeStage];
+  SIDES.forEach(side => {
+    const el = makeWorkElement(side, set.works[side]);
+    if (side === pickedSide) el.classList.add('selected');
+    trio.appendChild(el);
+  });
+}
+
+function renderMethod() {
+  const set = currentSet();
+  const trio = document.getElementById('trio-method');
+  trio.innerHTML = '';
+  SIDES.forEach(side => {
+    const el = makeWorkElement(side, set.works[side], {
+      afterFrameHTML: `<p class="method-text">${set.method[side]}</p>`
+    });
+    trio.appendChild(el);
+  });
+  setTimeout(() => {
+    document.querySelectorAll('#scene-method .method-text').forEach(t => t.classList.add('visible'));
+  }, 500);
+}
+
+function renderStructure() {
+  const set = currentSet();
+  const trio = document.getElementById('trio-structure');
+  trio.innerHTML = '';
+  SIDES.forEach(side => {
+    const lines = set.structure[side];
+    const linesHTML = lines.map((l, i) =>
+      `<p class="structure-line${l.emphasis ? ' emphasis' : ''}" data-row="${i}">${l.text}</p>`
+    ).join('');
+    const el = makeWorkElement(side, set.works[side], {
+      afterFrameHTML: `<div class="structure-column" data-column="${side}">${linesHTML}</div>`
+    });
+    trio.appendChild(el);
+  });
+
+  document.getElementById('structure-continue').style.opacity = '0';
+  let maxRow = 0;
+  document.querySelectorAll('#scene-structure .structure-line').forEach(l => {
+    const r = parseInt(l.dataset.row, 10);
+    if (r > maxRow) maxRow = r;
+  });
+  const startDelay = 500;
+  const rowInterval = 1000;
+  for (let row = 0; row <= maxRow; row++) {
+    setTimeout(() => {
+      document.querySelectorAll(`#scene-structure .structure-line[data-row="${row}"]`).forEach(l => l.classList.add('visible'));
+    }, startDelay + row * rowInterval);
+  }
+  setTimeout(() => {
+    document.getElementById('structure-continue').style.opacity = '1';
+  }, startDelay + (maxRow + 1) * rowInterval);
+}
+
+function renderReflect() {
+  const set = currentSet();
+  const j = state.judgments[set.id];
+
+  for (let stage = 1; stage <= 3; stage++) {
+    const side = j['judge' + stage];
+    const reason = j['reason' + stage];
+    const stepEl = document.getElementById(`step-${stage}`);
+    stepEl.classList.remove('changed');
+
+    const thumb = document.getElementById(`thumb-${stage}`);
+    thumb.innerHTML = '';
+    if (side) {
+      const work = set.works[side];
+      if (work.type === 'image') {
+        thumb.innerHTML = `<img src="${work.src}" alt="" onerror="this.parentElement.innerHTML='[ ${work.label} ]'">`;
+      } else if (work.type === 'audio') {
+        thumb.innerHTML = `<span style="font-family: var(--sans); font-size: 0.7rem; color: var(--text-mute); letter-spacing: 0.18em; text-transform: uppercase;">${work.label}</span>`;
+      } else if (work.type === 'video') {
+        thumb.innerHTML = `<video src="${work.src}" muted playsinline preload="metadata" onerror="this.parentElement.innerHTML='[ ${work.label} ]'"></video>`;
+      }
+    }
+    document.getElementById(`name-${stage}`).textContent = side ? set.works[side].label : '—';
+    document.getElementById(`reason-${stage}`).textContent = reason ? REASON_LABELS[reason] : '—';
+
+    if (stage > 1 && j['judge' + stage] && j['judge' + (stage - 1)] && j['judge' + stage] !== j['judge' + (stage - 1)]) {
+      stepEl.classList.add('changed');
+    }
+  }
+
+  const changes = [];
+  if (j.judge1 !== j.judge2) changes.push('after learning method');
+  if (j.judge2 !== j.judge3) changes.push('after learning structure');
+  let summary;
+  if (changes.length === 0) summary = 'You held the same judgment through all three stages.';
+  else if (changes.length === 1) summary = `Your judgment shifted ${changes[0]}.`;
+  else summary = 'Your judgment shifted at every stage.';
+  document.getElementById('summary-line').textContent = summary;
+
+  // Aggregate (with this user's contribution)
+  const agg = computeAggregate(set);
+  const aggEl = document.getElementById('aggregate');
+  aggEl.innerHTML = '';
+  ['left', 'middle', 'right'].forEach(side => {
+    const row = document.createElement('div');
+    row.className = 'agg-row';
+    row.innerHTML = `
+      <div class="label">${set.works[side].label}</div>
+      <div class="bar-track"><div class="bar-fill" data-pct="${agg[side]}"></div></div>
+      <div class="pct">${agg[side]}%</div>
+    `;
+    aggEl.appendChild(row);
+  });
+  setTimeout(() => {
+    document.querySelectorAll('#aggregate .bar-fill').forEach(b => {
+      b.style.width = b.dataset.pct + '%';
+    });
+  }, 800);
+
+  document.getElementById('agg-note').classList.remove('visible');
+  document.getElementById('agg-note').textContent = set.aggNote;
+  setTimeout(() => document.getElementById('agg-note').classList.add('visible'), 2400);
+}
+
+function computeAggregate(set) {
+  // Mock aggregate: baseline + this user's final pick (judge3) gets +1, normalized to %.
+  // Baseline values are aggregate.left/middle/right out of 100.
+  const baseline = set.aggregate;
+  const userPick = state.judgments[set.id].judge3;
+  const totalBase = baseline.left + baseline.middle + baseline.right;
+  const adjusted = { ...baseline };
+  if (userPick && adjusted[userPick] !== undefined) {
+    adjusted[userPick] += 1;
+  }
+  const total = adjusted.left + adjusted.middle + adjusted.right;
+  return {
+    left: Math.round(adjusted.left / total * 100),
+    middle: Math.round(adjusted.middle / total * 100),
+    right: Math.round(adjusted.right / total * 100),
+  };
+}
+
+function renderTransition() {
+  const set = currentSet();
+  document.getElementById('transition-marker').textContent = `End of ${set.label}`;
+  document.getElementById('transition-next').textContent = set.nextLabel || '';
+  document.getElementById('transition-blurb').textContent = set.nextBlurb || '';
+}
+
+function renderFinal() {
+  // Populate the 3x3 summary grid: cells [setId-stage]
+  for (let setId = 1; setId <= 3; setId++) {
+    const set = sets[setId - 1];
+    const j = state.judgments[setId];
+    for (let stage = 1; stage <= 3; stage++) {
+      const cell = document.querySelector(`[data-cell="${setId}-${stage}"]`);
+      const side = j['judge' + stage];
+      cell.textContent = side ? set.works[side].label : '—';
+      cell.classList.remove('changed-from-prev');
+      if (stage > 1 && side && j['judge' + (stage - 1)] && side !== j['judge' + (stage - 1)]) {
+        cell.classList.add('changed-from-prev');
+      }
+    }
+  }
+
+  // Stats
+  let aiPicks = 0, totalChanges = 0, mediumDifferent = 0;
+  const finalPicks = [];
+  for (let setId = 1; setId <= 3; setId++) {
+    const j = state.judgments[setId];
+    [j.judge1, j.judge2, j.judge3].forEach(p => { if (p === 'right') aiPicks += 1; });
+    if (j.judge1 !== j.judge2 && j.judge2) totalChanges += 1;
+    if (j.judge2 !== j.judge3 && j.judge3) totalChanges += 1;
+    if (j.judge3) finalPicks.push(j.judge3);
+  }
+  // mediumDifferent: did the audience pick differently across the 3 final picks?
+  const uniqueFinals = new Set(finalPicks);
+  mediumDifferent = uniqueFinals.size;
+
+  document.getElementById('final-stat-1').innerHTML =
+    `You picked the AI option <span class="num">${aiPicks}</span> ${aiPicks === 1 ? 'time' : 'times'} out of nine.`;
+  document.getElementById('final-stat-2').innerHTML =
+    `Your judgment changed <span class="num">${totalChanges}</span> ${totalChanges === 1 ? 'time' : 'times'} after a reveal.`;
+
+  let mediumLine = '';
+  if (mediumDifferent === 1) mediumLine = 'Your final pick was the same across all three media.';
+  else if (mediumDifferent === 2) mediumLine = 'You judged the three media by two different standards.';
+  else mediumLine = 'You judged each medium differently.';
+  document.getElementById('final-stat-3').innerHTML = mediumLine;
+}
+
+/* =========================================================================
+   Scene navigation
+========================================================================= */
+function goToScene(id) {
+  pauseAllMedia();
+  document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
+  document.body.classList.toggle('scene-intro-active', id === 'intro');
+  document.body.classList.toggle('scene-final-active', id === 'final');
+
+  const target = document.getElementById('scene-' + id);
+  if (!target) return;
+
+  setTimeout(() => {
+    target.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    onSceneEnter(id);
+    updateProgress(id);
+  }, 50);
+}
+
+function onSceneEnter(id) {
+  if (id === 'judge') renderJudge();
+  if (id === 'reason') renderReason();
+  if (id === 'method') renderMethod();
+  if (id === 'structure') renderStructure();
+  if (id === 'reflect') renderReflect();
+  if (id === 'transition') renderTransition();
+  if (id === 'final') renderFinal();
+}
+
+function updateProgress(id) {
+  const set = currentSet();
+  let label = 'When Creation Changes';
+  if (id === 'intro') label = 'Begin';
+  else if (id === 'final') label = 'End';
+  else if (id === 'transition') label = `Between ${set.label} and ${sets[state.setIndex + 1] ? sets[state.setIndex + 1].label : ''}`;
+  else label = set ? `${set.label} · ${set.medium}` : label;
+  document.getElementById('progress').textContent = label;
+}
+
+/* =========================================================================
+   Wire up handlers
+========================================================================= */
+document.getElementById('btn-begin').addEventListener('click', () => {
+  state.setIndex = 0;
+  state.judgeStage = 1;
+  goToScene('judge');
+});
+
+document.querySelectorAll('.reason-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const set = currentSet();
+    state.judgments[set.id]['reason' + state.judgeStage] = btn.dataset.reason;
+    if (state.judgeStage === 1) goToScene('method');
+    else if (state.judgeStage === 2) goToScene('structure');
+    else goToScene('reflect');
+  });
+});
+
+document.getElementById('btn-method-continue').addEventListener('click', () => {
+  state.judgeStage = 2;
+  goToScene('judge');
+});
+
+document.getElementById('btn-structure-continue').addEventListener('click', () => {
+  state.judgeStage = 3;
+  goToScene('judge');
+});
+
+document.getElementById('btn-reflect-continue').addEventListener('click', () => {
+  if (state.setIndex < sets.length - 1) {
+    goToScene('transition');
+  } else {
+    goToScene('final');
+  }
+});
+
+document.getElementById('btn-transition-continue').addEventListener('click', () => {
+  state.setIndex += 1;
+  state.judgeStage = 1;
+  goToScene('judge');
+});
+
+document.getElementById('btn-restart').addEventListener('click', () => {
+  state.setIndex = 0;
+  state.judgeStage = 1;
+  for (let i = 1; i <= 3; i++) {
+    state.judgments[i] = { judge1: null, reason1: null, judge2: null, reason2: null, judge3: null, reason3: null };
+  }
+  goToScene('intro');
+});
+</script>
+
+</body>
+</html>
